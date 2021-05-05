@@ -104,12 +104,13 @@ def build_plots_from_results(results):
             
         plt.figure(plot_number)
         plt.plot(freq_values, rcs_values)
-        plt.xlabel('Frequency')  
-        plt.ylabel('RCS')  
-        plt.title(f'D={D}, frequency in [{freq_min}, {freq_max}]') 
+        plt.xlabel('Frequency')
+        plt.ylabel('RCS')
+        plt.title(f'D={D}, frequency in [{freq_min}, {freq_max}]')
         plt.savefig(f'Figure_{plot_number:02}.png')
         plot_number += 1
-    
+        plt.grid()
+        plt.show()
 
 def save_results_as_json(results, filename):
     results_with_only_needed_fields = []
