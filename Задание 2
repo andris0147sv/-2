@@ -8,28 +8,31 @@ from scipy import constants
 from scipy.special import spherical_jn, spherical_yn
 
 def count_lambda(frequency):
-       return constants.speed_of_light / frequency
+    return constants.speed_of_light / frequency
 
 def count_k(frequency):
-       return 2.0 * constants.pi / count_lambda(frequency)
+    return 2.0 * constants.pi / count_lambda(frequency)
 
 def count_r(diameter):
-       return diameter / 2.0
+    return diameter / 2.0
 
 def count_j_n(n, x):
-       return spherical_jn(n, x)
+    return spherical_jn(n, x)
 
 def count_y_n(n, x):
-       return spherical_yn(n, x)
+    return spherical_yn(n, x)
 
 def count_h_n(n, x):
-       return complex(count_j_n(n, x), count_y_n(n, x))
+    return complex(count_j_n(n, x), count_y_n(n, x))
 
 
 def count_a_n(n, k, r):
     return count_j_n(n, k*r) / count_h_n(n, k*r)
 
 def count_b_n(n, k, r):
+    kr = k * r
+    numerator = kr * count_j_n(n - 1, kr) - n * count_j_n(n, kr)
+    denominator = kr * count_h_n(n - 1, kr) - n * count_h_n(n, kr)
     return numerator / denominator
 
 def count_rcs_number_series_sum(k, r):
@@ -39,11 +42,12 @@ def count_rcs_number_series_sum(k, r):
     stopping_precision = 1e-3
     while True:
         prev_iteration_sum = current_iteration_sum
-        current_iteration_sum += (-1 ** n) * (n + 0.5) * (count_b_n(n, k, r) - count_a_n(n, k, r))
+        current_iteration_sum += ((-1) ** n) * (n + 0.5) * (count_b_n(n, k, r) - count_a_n(n, k, r))
         if abs(current_iteration_sum - prev_iteration_sum) < 1e-3:
             break
         n += 1
     return current_iteration_sum
+
 
 def count_rcs(counted_lambda, k, r):
     multiplier = (counted_lambda ** 2) / constants.pi
@@ -64,7 +68,7 @@ def process_data(data):
 
     for entry in data:
         r = count_r(entry['diameter'])
-        frequences = numpy.linspace(entry['freq_min'], entry['freq_max'], 1000)  # Making list of 1000 frequences from range
+        frequences = numpy.linspace(entry['freq_min'], entry['freq_max'], 1000)
         
         result_for_entry = {
             'freq': [],
@@ -100,9 +104,9 @@ def build_plots_from_results(results):
             
         plt.figure(plot_number)
         plt.plot(freq_values, rcs_values)
-        plt.xlabel('Frequency')
-        plt.ylabel('RCS')
-        plt.title(f'D={D}, frequency in [{freq_min}, {freq_max}]')
+        plt.xlabel('Frequency')  
+        plt.ylabel('RCS')  
+        plt.title(f'D={D}, frequency in [{freq_min}, {freq_max}]') 
         plt.savefig(f'Figure_{plot_number:02}.png')
         plot_number += 1
     
@@ -120,10 +124,8 @@ def save_results_as_json(results, filename):
     jsbeautifier_options.indent_size = 2
     json_data_formatted = jsbeautifier.beautify(json_data, jsbeautifier_options)
 
-
     with open(filename, 'w') as file:
         print(json_data_formatted, file=file)
-
 
 if __name__ == "__main__":
     print('Fetching data from server')
