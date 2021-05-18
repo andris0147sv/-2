@@ -1,144 +1,97 @@
 import requests
-import numpy
-import json
-import jsbeautifier
-import matplotlib.pyplot as plt
-from parse import parse
-from scipy import constants
+import math
+import scipy.special
+import numpy as np
 from scipy.special import spherical_jn, spherical_yn
+import matplotlib.pyplot as plt
+import requests as rqst
+import json
+import csv
 
-def count_lambda(frequency):
-    return constants.speed_of_light / frequency
+# Рассчитать ЭПР
+# Построить график
+# Сохранить результаты в файл
 
-def count_k(frequency):
-    return 2.0 * constants.pi / count_lambda(frequency)
+# Radar cross section
+def RCS(lam, r):
+    summ = 0
+    kr = 2 * math.pi * r / lam
+    # Задаем значения функций Бесселя для n = 0 для первой итерации
+    J_prev = spherical_jn (0, kr)
+    Y_prev = spherical_yn (0, kr)
+    H_prev = J_prev + 1j * Y_prev
+    for n in range(1, 50):
+        # Вычисляем значения функций Бесселя для текущей n
+        J_now = spherical_jn (n, kr)
+        #J_prev = spherical_jn (n - 1, kr)
+        Y_now = spherical_yn (n, kr)
+        #Y_prev = spherical_yn (n - 1, kr)
+        H_now = J_now + 1j * Y_now
+        #H_prev = J_prev + 1j * Y_prev
+        # Считаем коэффициенты a и b
+        a = J_now / H_now
+        b = (kr * J_prev - n * J_now) / (kr * H_prev - n * H_now)
+        summ += ((-1) ** n) * (n + 0.5) * (b - a)
+        # Переносим значения функций Бесселя на следующий шаг
+        J_prev = J_now
+        Y_prev = Y_now
+        H_prev = H_now
+    return lam * lam * np.abs(summ) * np.abs(summ) / math.pi
 
-def count_r(diameter):
-    return diameter / 2.0
+def graf(lam, p):
+  plt.plot(lam, p)
+  plt.ylabel('RCS')
+  plt.xlabel('lambda')
+  plt.grid()
+  plt.show()
 
-def count_j_n(n, x):
-    return spherical_jn(n, x)
+def graf_freq(f, p):
+  plt.plot(f, p)
+  plt.ylabel('RCS, [$м^2$]')
+  plt.xlabel('f, [Гц]')
+  plt.grid()
+  plt.show()
 
-def count_y_n(n, x):
-    return spherical_yn(n, x)
+# Скачать файл с вариантом задания 
 
-def count_h_n(n, x):
-    return complex(count_j_n(n, x), count_y_n(n, x))
+def download(url):
+  r=rqst.get(url)
+  return r.text
 
+# Разобрать прочитанные данные и найти нужные данные
 
-def count_a_n(n, k, r):
-    return count_j_n(n, k*r) / count_h_n(n, k*r)
+# Возврат данных по номеру варианта
+def var(text,nomervar):
+  t=text.splitlines()
+  return t[nomervar]
 
-def count_b_n(n, k, r):
-    kr = k * r
-    numerator = kr * count_j_n(n - 1, kr) - n * count_j_n(n, kr)
-    denominator = kr * count_h_n(n - 1, kr) - n * count_h_n(n, kr)
-    return numerator / denominator
-
-def count_rcs_number_series_sum(k, r):
-    prev_iteration_sum = None
-    current_iteration_sum = 0.0
-    n = 1
-    stopping_precision = 1e-3
-    while True:
-        prev_iteration_sum = current_iteration_sum
-        current_iteration_sum += ((-1) ** n) * (n + 0.5) * (count_b_n(n, k, r) - count_a_n(n, k, r))
-        if abs(current_iteration_sum - prev_iteration_sum) < 1e-3:
-            break
-        n += 1
-    return current_iteration_sum
-
-
-def count_rcs(counted_lambda, k, r):
-    multiplier = (counted_lambda ** 2) / constants.pi
-    series_sum = abs(count_rcs_number_series_sum(k, r)) ** 2
-    return multiplier * series_sum
-
-
-
-def fetch_data_from_server():
-    url = "https://jenyay.net/uploads/Student/Modelling/task_02_01.txt"
-    response = requests.get(url)
-    data_lines = response.text.strip().split('\r\n')
-    data_parsed = [parse("{id:d}. D={diameter:g}; fmin={freq_min:g}; fmax={freq_max:g}", line).named for line in data_lines]
-    return data_parsed
-
-def process_data(data):
-    results = []
-
-    for entry in data:
-        r = count_r(entry['diameter'])
-        frequences = numpy.linspace(entry['freq_min'], entry['freq_max'], 1000)
-        
-        result_for_entry = {
-            'freq': [],
-            'lambda': [],
-            'rcs': [],
-            'd': entry['diameter'],
-            'freq_min': entry['freq_min'],
-            'freq_max': entry['freq_max'],
-        }
-
-        for freq in frequences:
-            k = count_k(freq)
-            counted_lambda = count_lambda(freq)
-            rcs = count_rcs(counted_lambda, k, r)
-            result_for_entry['freq'].append(freq)
-            result_for_entry['lambda'].append(counted_lambda)
-            result_for_entry['rcs'].append(rcs)
-        results.append(result_for_entry)
-
-    return results
-
-
-def build_plots_from_results(results):
-    plot_number = 0
-
-    for single_experiment_result in results:
-        rcs_values = single_experiment_result['rcs']
-        freq_values = single_experiment_result['freq']
-
-        D = single_experiment_result['d']
-        freq_min = single_experiment_result['freq_min']
-        freq_max = single_experiment_result['freq_max']
-            
-        plt.figure(plot_number)
-        plt.plot(freq_values, rcs_values)
-        plt.xlabel('Frequency')
-        plt.ylabel('RCS')
-        plt.title(f'D={D}, frequency in [{freq_min}, {freq_max}]')
-        plt.savefig(f'Figure_{plot_number:02}.png')
-        plot_number += 1
-        plt.grid()
-        plt.show()
-
-def save_results_as_json(results, filename):
-    results_with_only_needed_fields = []
-    for entry in results:
-        results_with_only_needed_fields.append({
-            "freq": entry['freq'],
-            "lambda": entry['lambda'],
-            "rcs": entry['rcs']
-        })
-    json_data = json.dumps(results_with_only_needed_fields)
-    jsbeautifier_options = jsbeautifier.default_options()
-    jsbeautifier_options.indent_size = 2
-    json_data_formatted = jsbeautifier.beautify(json_data, jsbeautifier_options)
-
-    with open(filename, 'w') as file:
-        print(json_data_formatted, file=file)
-
-if __name__ == "__main__":
-    print('Fetching data from server')
-    data = fetch_data_from_server()
-    print('Fetched these values:')
-    for entry in data:
-        print(entry)
-    print('Processing data...')
-    results = process_data(data)
-    print('Finished processing data. Building plots and saving them to files...')
-    build_plots_from_results(results)
-    print('Finished building plots and saving. Saving results as json...')
-    save_results_as_json(results, 'results.json')
-    print('Finished saving results as json.')
-    print('Everything is done. Goodbye!')
+# Запись в json-файл
+def jsonfile(ls, Lambda, s):
+    keys = ["freq", "lambda", "rcs"]
+    values = [ls, Lambda, s]
+    dicts = {}
+    for i in range(len(keys)):
+        dicts[keys[i]] = []
+        for j in range(len(values[i])):
+            dicts[keys[i]].append(values[i][j])
+    with open('task2_01.json', 'w') as out:
+        json.dump(dicts, out)
+  
+if __name__ == '__main__':
+    txt = download('https://jenyay.net/uploads/Student/Modelling/task_02_01.txt')
+    nomer_varianta = 1
+    line=var(txt, nomer_varianta - 1)
+    print(line)
+    L = line.split(';')
+    D = float(L[0].split('=')[1])
+    fmin = float(L[1].split('=')[1])
+    fmax = float(L[2].split('=')[1])
+    s=[]
+    ls=np.linspace(fmin,fmax,300)
+    Lambda = 3e8 / ls
+    for f in ls:
+        p=RCS(3e8 / f, D/2)
+        s.append(p)
+    
+    graf_freq(ls,s)
+    jsonfile(ls, Lambda, s)
